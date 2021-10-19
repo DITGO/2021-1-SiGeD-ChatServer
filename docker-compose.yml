@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  redis_siged:
+    container_name: redis_siged
+    image: redis:latest
+    ports:
+      - 3003:3003
+    env_file: .env
+    ports:
+      - 6379:6379
+  
+
+
