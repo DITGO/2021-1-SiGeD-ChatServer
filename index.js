@@ -37,27 +37,35 @@ const createRoomToUserIfNotExist = (userId) =>{
   });
 }
 
-const updateMyRooms = (userId, roomId, status) => {
-  var myRooms;
+const updateMyRooms = (userId, roomId, status, userName) => {
+  var myRooms={};
   client.get(userId, (err, reply) => {
     if (err) throw err;
     myRooms = JSON.parse(reply);
-    myRooms[`${roomId}`] = status;
-    client.set(userId, `${JSON.stringify(myRooms)}`);
+    console.log(myRooms);
+    if(myRooms == null){
+      myRooms= {};
+    }
+    myRooms[`${roomId}`] = { 'status': status, 'userName': userName};
+
+   client.set(userId, `${JSON.stringify(myRooms)}`);
     console.log('conversas: ', myRooms);
   });
 }
 
+
+
+
 io.on('connection', async(socket) => {
 
   //Ouvindo evento message
-  socket.on('message', async(data)=>{
+  socket.on('message', async(data)=> {
     
     const message = { ...data.data, 'date': new Date()};
     console.log("mensagem recebida", JSON.stringify(message));
-    //Verificar se a conversar já existe
-
     var roomId = message.roomId;
+    //Verificar se a conversar já existe
+    //Se estiver vazia é uma nova conversa
     if(roomId === ''){
       roomId = generateRoomId(message.userId, message.toId);
       console.log('ID da conversa', roomId);
@@ -68,7 +76,7 @@ io.on('connection', async(socket) => {
     else{
       // Pegar os dados da chave no redis e adicionar nova mensagem
       var roomData = [];
-      client.get(roomId,(err, reply) => {
+      client.get(roomId, (err, reply) => {
         if (err) throw err;
         roomData = JSON.parse(reply);
         roomData.push(message);
@@ -82,8 +90,8 @@ io.on('connection', async(socket) => {
     createRoomToUserIfNotExist(message.toId);
     createRoomToUserIfNotExist(message.userId);
     //Adiciona status das conversas em cada chave de usuário
-    updateMyRooms(message.userId, roomId, 0);
-    updateMyRooms(message.toId, roomId, 1);
+    updateMyRooms(message.userId, roomId, 0, message.toUserName);
+    updateMyRooms(message.toId, roomId, 1, message.userName);
 
     //Notificar usuário sobre nova mensagem
     io.emit(message.toId, {alert: roomId});
@@ -91,7 +99,7 @@ io.on('connection', async(socket) => {
     //Enviando emitindo mensagem para sala(conversa)
     io.emit(roomId,message);
   });
-  
+
   
   socket.on("disconnect", async () => {
    console.log("Um usuário se desconectou");
@@ -99,14 +107,32 @@ io.on('connection', async(socket) => {
 
 });
 
-
-
-app.get('/', (req, res) => {
-    res
-      .status(200)
-      .send('Hello, world!')
-      .end();
+//Retornar lista com ids das conversas(rooms)
+app.get('/my-rooms/:id', (req, res) => {
+  const id = req.params.id;
+  var myRooms;
+  client.get(id, (err, reply) => {
+    if (err) throw err;
+    myRooms = JSON.parse(reply);
+    //Retornando minhas salas/conversas
+    res.send(myRooms).status(200);
+  });
 });
+
+//Rotornar todas as mensagens de uma conversa(room)
+
+app.get('/conversation/:id', (req, res) => {
+  const id = req.params.id;
+  var messages;
+  client.get(id, (err, reply) => {
+    if (err) throw err;
+    messages = JSON.parse(reply);
+    //Retornando minhas salas/conversas
+    res.send(messages).status(200);
+  });
+
+});
+
 
 app.use(bodyParser.json());
 
